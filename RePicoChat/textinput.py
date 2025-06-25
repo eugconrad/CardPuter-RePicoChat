@@ -1,72 +1,78 @@
+class Cursor:
+    def __init__(self, color_bg, color_fg):
+        self.blink = 500
+        self.pos = 0
+
+        self.color_bg = color_bg
+        self.color_fg = color_fg
+
+        self.direction = 1
+        self.step = 0
+        self.steps = 50
+
+    def to_start(self):
+        self.pos = 0
+
+    def to_end(self, length=28):
+        self.pos = min(length, 28)
+
+    def move(self, direction, max_len=28):
+        self.pos = max(0, min(self.pos + direction, max_len))
+
+    def tick(self) -> int:
+        self.step = (self.step + 1) % (self.steps * 2)
+        direction = 1 if self.step < self.steps else -1
+        progress = (self.step % self.steps) / self.steps
+
+        def get_components(color):
+            return (color >> 8) & 0xF8, (color >> 3) & 0xFC, (color << 3) & 0xF8
+
+        bg_r, bg_g, bg_b = get_components(self.color_bg)
+        fg_r, fg_g, fg_b = get_components(self.color_fg)
+        r = bg_r + int((fg_r - bg_r) * (progress if direction > 0 else 1 - progress))
+        g = bg_g + int((fg_g - bg_g) * (progress if direction > 0 else 1 - progress))
+        b = bg_b + int((fg_b - bg_b) * (progress if direction > 0 else 1 - progress))
+        return (r << 8) & 0xF800 | (g << 3) & 0x07E0 | (b >> 3)
+
+    @property
+    def x(self):
+        return min(self.pos, 28) * 8
+
+
 class TextInputManager:
-    class Cursor:
-        def __init__(self):
-            self.pos = 0
-            self.blink_timer = 100
-            self.visible = True
+    def __init__(self, cursor: Cursor):
+        self.input_chars = []
+        self.cursor = cursor
 
-        def to_start(self):
-            self.pos = 0
-
-        def to_end(self, length: int = 25):
-            self.pos = length
-
-        def move(self, direction: int, max_len: int = 25):
-            if direction < 0 < self.pos:
-                self.pos -= 1
-            elif direction > 0 and self.pos < max_len:
-                self.pos += 1
-
-        def tick(self):
-            self.blink_timer -= 1
-            if self.blink_timer <= 0:
-                self.blink_timer = 100
-                self.visible = not self.visible
-            return self.visible
-
-        @property
-        def x(self) -> int:
-            if self.pos < 25:
-                return self.pos * 8 + 8
-            else:
-                return 25 * 8 + 8
-
-    def __init__(self):
-        self.input_text = ""
-        self.cursor = self.Cursor()
-
-    def add_char(self, char: str):
-        self.input_text = (
-                self.input_text[:self.cursor.pos] + char + self.input_text[self.cursor.pos:]
-        )
+    def add_char(self, c):
+        self.input_chars.insert(self.cursor.pos, c)
         self.cursor.pos += 1
 
-    def del_char(self, direction: int = -1):
-        if direction == -1 and self.cursor.pos > 0:
-            self.input_text = (
-                    self.input_text[:self.cursor.pos - 1] + self.input_text[self.cursor.pos:]
-            )
+    def del_char(self, dir=-1):
+        if dir == -1 and self.cursor.pos > 0:
             self.cursor.pos -= 1
-        elif direction == 1 and self.cursor.pos < len(self.input_text):
-            self.input_text = (
-                    self.input_text[:self.cursor.pos] + self.input_text[self.cursor.pos + 1:]
-            )
+            self.input_chars.pop(self.cursor.pos)
+        elif dir == 1 and self.cursor.pos < len(self.input_chars):
+            self.input_chars.pop(self.cursor.pos)
 
-    def move_cursor(self, direction: int):
-        self.cursor.move(direction, len(self.input_text))
+    def move_cursor(self, d):
+        self.cursor.move(d, len(self.input_chars))
 
     def reset_cursor(self):
         self.cursor.to_start()
 
     def end_cursor(self):
-        self.cursor.to_end(len(self.input_text))
+        self.cursor.to_end(len(self.input_chars))
 
     def clear(self):
-        self.input_text = ""
+        self.input_chars.clear()
         self.cursor.to_start()
 
-    def get_visible_text(self, max_len: int = 25):
+    def get_text(self):
+        return "".join(self.input_chars)
+
+    def get_visible_text(self, max_len=28):
         if self.cursor.pos < max_len:
-            return self.input_text[-max_len:]
+            return self.get_text()[-max_len:]
         else:
-            return self.input_text[self.cursor.pos - max_len:self.cursor.pos]
+            return self.get_text()[self.cursor.pos - max_len:self.cursor.pos]
