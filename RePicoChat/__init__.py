@@ -8,6 +8,33 @@ from .textinput import TextInputManager
 
 
 async def main():
+    """
+    Initialize and run the RePicoChat application.
+
+    This asynchronous function sets up the application with WLAN connectivity,
+    configures the chat client, and manages user input for sending messages.
+    It also provides options for changing the username and server settings
+    through a UI overlay. The function continuously listens for keyboard input
+    to handle message editing and sending, as well as cursor movement.
+
+    Attributes:
+        app (App): The main application instance.
+        config (PicoChatConfig): Configuration for the chat client.
+        client (PicoChatClient): The chat client instance.
+        text_input (TextInputManager): Manages text input and cursor behavior.
+
+    Functions:
+        options(): Handles the settings menu for changing username and server.
+        on_new_messages(messages: list): Updates the display with new messages.
+
+    Keyboard Controls:
+        - Arrow keys: Move the cursor.
+        - BSPC/DEL: Delete characters.
+        - SPC: Add a space.
+        - ENT: Send the message.
+        - ESC: Quit the application.
+        - G0: Open settings menu.
+    """
     app = App(app_name="RePicoChat", enable_wlan=True)
 
     config = PicoChatConfig(hydra_config=app.config)
