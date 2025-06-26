@@ -1,4 +1,3 @@
-import asyncio
 import random
 import requests
 
@@ -37,9 +36,11 @@ class PicoChatConfig:
 
 class PicoChatClient:
     def __init__(self, pico_chat_config):
-        self.on_new_messages = None
+        self.callback = None
+        self.messages = []
+        self.on_request_start = None
+        self.on_request_end = None
         self._config = pico_chat_config
-        self._last_messages = []
 
     @staticmethod
     def wrap_text(text, width=30):
@@ -55,19 +56,8 @@ class PicoChatClient:
         lines.append(line)
         return lines
 
-    @property
-    def validator(self):
-        return random.random()
-
-    def get_messages(self):
-        try:
-            r = requests.get(f'https://{self._config.server}/{self.validator}/%2bget')
-            if r.status_code == 204:
-                return self._last_messages
-            raw = r.content.decode()
-        except:
-            return self._last_messages
-
+    @staticmethod
+    def _parse_messages(raw):
         msgs = []
         for m in raw.split('-')[-15:]:
             try:
@@ -77,26 +67,45 @@ class PicoChatClient:
                 pass
         return msgs
 
-    def send_message(self, msg):
-        msg = msg.strip()
-        if not msg:
-            return False
-        data = f"<{self._config.username}> {msg}\n"
-        enc = b64.b32encode(data.encode()).decode()
+    @property
+    def _validator(self):
+        return random.random()
+
+    def _fetch(self, path):
+        if self.on_request_start:
+            self.on_request_start()
         try:
-            requests.get(f'https://{self._config.server}/{self.validator}/{enc}')
-            return True
+            r = requests.get(f'https://{self._config.server}/{self._validator}/{path}')
+            if r.status_code == 204:
+                return None
+            return r.content.decode()
         except:
+            return None
+        finally:
+            if self.on_request_end:
+                self.on_request_end()
+
+    def get_messages(self):
+        raw = self._fetch('%2bget')
+        if not raw:
+            return self.messages
+        self.messages = self._parse_messages(raw)
+        return self.messages
+
+    def send_message(self, text: str):
+        text = text.strip()
+        if not text:
             return False
+        data = f"<{self._config.username}> {text}\n"
+        encoded = b64.b32encode(data.encode()).decode()
+        raw = self._fetch(encoded)
+        if not raw:
+            return self.messages
+        self.messages = self._parse_messages(raw)
+        return self.messages
 
     def update(self, get=True):
-        msgs = self.get_messages() if get else self._last_messages
-        if msgs != self._last_messages or not get:
-            self._last_messages = msgs
-            if self.on_new_messages:
-                self.on_new_messages(msgs)
-
-    async def start_polling(self, interval=5):
-        while True:
-            self.update()
-            await asyncio.sleep(interval)
+        msgs = self.get_messages() if get else self.messages
+        self.messages = msgs
+        if self.callback:
+            self.callback(msgs)
