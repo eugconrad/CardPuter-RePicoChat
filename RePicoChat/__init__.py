@@ -25,6 +25,7 @@ class Core:
         self.client.callback = self.on_new_messages
         self.client.on_request_start = self.on_request_start
         self.client.on_request_end = self.on_request_end
+        self.afk = False
         self.update_timer = time.ticks_ms()
         self.running = True
 
@@ -51,13 +52,15 @@ class Core:
             keys = self.app.userinput.get_new_keys()
             if keys:
                 await self.handle_keys(keys)
+                self.afk = False
                 self.reset_update_timer()
 
             self.draw_input()
 
             now = time.ticks_ms()
-            if time.ticks_diff(now, time.ticks_add(self.update_timer, 10000)) > 0:
+            if time.ticks_diff(now, time.ticks_add(self.update_timer, 5000 if self.afk else 10000)) > 0:
                 self.client.update()
+                self.afk = True
                 self.reset_update_timer()
 
             await asyncio.sleep(0)
@@ -93,9 +96,16 @@ class Core:
 
     def draw_input(self):
         d = self.app.display.display
-        d.fill_rect(0, 120, self.app.display.DISPLAY_WIDTH, self.app.display.DISPLAY_HEIGHT, self.app.display.FG_COLOR)
-        d.text(self.text_input.get_visible_text(), 4, 124, self.app.display.TEXT_COLOR)
-        d.text("|", self.text_input.cursor.x + 4, 124, self.text_input.cursor.tick())
+        d.fill_rect(
+            0, 120, self.app.display.DISPLAY_WIDTH, self.app.display.DISPLAY_HEIGHT,
+            self.app.display.FG_COLOR_DARK if self.afk else self.app.display.FG_COLOR
+        )
+        d.text(
+            self.text_input.get_visible_text(), 4, 124,
+            self.app.display.TEXT_COLOR_DARK if self.afk else self.app.display.TEXT_COLOR
+        )
+        if not self.afk:
+            d.text("|", self.text_input.cursor.x + 4, 124, self.text_input.cursor.tick())
         d.show()
 
     def on_new_messages(self, msgs):
