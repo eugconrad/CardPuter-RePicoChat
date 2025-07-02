@@ -1,46 +1,17 @@
 import random
 import requests
 
-from lib.hydra.config import Config
 from . import base64 as b64
 
 
-class PicoChatConfig:
-    def __init__(self, hydra_config=Config()):
-        self._config = hydra_config
-
-    @property
-    def server(self):
-        key = "pico_chat_server"
-        if key not in self._config.config:
-            self._config[key] = "picochat-server.fly.dev"
-        return self._config[key]
-
-    @server.setter
-    def server(self, value):
-        self._config["pico_chat_server"] = str(value)
-        self._config.save()
-
-    @property
-    def username(self):
-        key = "pico_chat_username"
-        if key not in self._config.config:
-            self._config[key] = "User_" + str(random.randint(1000, 9999))
-        return self._config[key]
-
-    @username.setter
-    def username(self, value):
-        self._config["pico_chat_username"] = str(value)
-        self._config.save()
-
-
-class PicoChatClient:
-    def __init__(self, pico_chat_config):
-        self.callback = None
+class Client:
+    def __init__(self, config):
         self.messages = []
         self.on_request_start = None
         self.on_request_end = None
-        self._config = pico_chat_config
+        self.on_update = None
+        self.on_new_message = None
+        self._config = config
 
     @staticmethod
     def wrap_text(text, width=30):
@@ -89,23 +60,22 @@ class PicoChatClient:
         raw = self._fetch('%2bget')
         if not raw:
             return self.messages
-        self.messages = self._parse_messages(raw)
-        return self.messages
+        return self._parse_messages(raw)
 
     def send_message(self, text: str):
         text = text.strip()
         if not text:
-            return False
+            return self.messages
         data = f"<{self._config.username}> {text}\n"
         encoded = b64.b32encode(data.encode()).decode()
         raw = self._fetch(encoded)
         if not raw:
             return self.messages
-        self.messages = self._parse_messages(raw)
-        return self.messages
+        return self._parse_messages(raw)
 
-    def update(self, get=True):
-        msgs = self.get_messages() if get else self.messages
-        self.messages = msgs
-        if self.callback:
-            self.callback(msgs)
+    def update(self, messages):
+        if self.on_update:
+            self.on_update(messages)
+        if self.on_new_message and messages != self.messages:
+            self.on_new_message()
+        self.messages = messages
